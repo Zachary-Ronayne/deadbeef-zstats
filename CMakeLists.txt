@@ -1,19 +1,19 @@
 cmake_minimum_required(VERSION 3.14)
 project(zstat LANGUAGES C VERSION 2.0 DESCRIPTION "DeaDBeeF zstat Plugin")
 
-unset(API CACHE)
+unset(DEADBEEF_H CACHE)
 
-# Place deadbeef install path here
-set(${DEADBEEF_PATH} "/path/to/deadbeef")
-
-
-find_file(API deadbeef.h PATHS DEADBEEF_PATH PATH_SUFFIXES deadbeef HINTS ~ ..)
-if (NOT API)
-    message(FATAL_ERROR "DeaDBeeF API: MISSING")
+find_file(DEADBEEF_H 
+    NAMES deadbeef.h
+    PATHS "${CMAKE_CURRENT_LIST_DIR}"
+    NO_DEFAULT_PATH
+)
+if (NOT DEADBEEF_H)
+    message(FATAL_ERROR "DeaDBeeF deadbeef.h missing, get it from the repo and add it to the root directory, repo: https://github.com/DeaDBeeF-Player/deadbeef ")
 else()
-    get_filename_component(API_DIR ${API} DIRECTORY)
-    include_directories(${API_DIR})
-    message(STATUS "DeaDBeeF API: present (${API})")
+    get_filename_component(DEADBEEF_DIR ${DEADBEEF_H} DIRECTORY)
+    include_directories(${DEADBEEF_DIR})
+    message(STATUS "deadbeef.h: present (${DEADBEEF_H})")
 endif()
 
 # Add zstat
