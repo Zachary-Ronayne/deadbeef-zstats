@@ -10,19 +10,19 @@ static DB_functions_t *deadbeef;
 
 // Called when deadbeef triggers an event
 static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint32_t p2){
-    fprintf(stderr, "zstats got event\n");
+    deadbeef->log("zstats got event\n");
     return 0;
 }
 
 // Run when deadbeef starts
 static int start(void){
-    fprintf(stderr, "zstats start\n");
+    deadbeef->log("zstats start\n");
     return 0;
 }
 
 // Called when the plugin stops
 static int stop(void) {
-    fprintf(stderr, "zstats stop\n");
+    deadbeef->log("zstats stop\n");
     return 0;
 }
 
