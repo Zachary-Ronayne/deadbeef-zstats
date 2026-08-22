@@ -90,8 +90,27 @@ static int updateStat(DB_playItem_t *track){
     zstat stat;
     findsStat(track, &stat);
 
+    // TODO add to the readme explaining how to display these fields
+
     updateIntMeta(stat.play_count, track, META_PLAY_COUNT);
-    updateIntMeta(stat.last_played, track, META_LAST_PLAYED);
+
+    time_t last_played = stat.last_played / 1000;
+    
+    struct tm *tm_info = localtime(&last_played);
+    char numberStr[64];
+    // TODO make this time format configurable in the plugin config screen
+    strftime(
+        numberStr,
+        sizeof(numberStr),
+        "%Y-%m-%d %H:%M:%S",
+        tm_info
+    );
+    deadbeef->pl_replace_meta(
+        track,
+        META_LAST_PLAYED,
+        numberStr
+    );
+
     return 0;
 }
 
@@ -101,11 +120,6 @@ static int updateStats(void){
 
     while(track){
         updateStat(track);
-
-        // TODO is this setting anything?
-        // deadbeef->pl_lock();
-        // deadbeef->pl_set_meta_int(track, "test", 69);
-        // deadbeef->pl_unlock();
 
         DB_playItem_t *next = deadbeef->pl_get_next(track, PL_MAIN);
         deadbeef->pl_item_unref(track);
@@ -117,6 +131,7 @@ static int updateStats(void){
 
 // Run when deadbeef connects the plugin
 static int connect(void){
+    // TODO is this doing anything?
     return updateStats();
 }
 
