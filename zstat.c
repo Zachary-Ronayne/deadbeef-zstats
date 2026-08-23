@@ -54,16 +54,22 @@ static void findsStat(DB_playItem_t *track, zstat *stat){
     char *songPath;
     int success = copySongPath(track, &songPath);
 
-    // TODO use path to get stats
+    // TODO use path to get stats from sql db?
     const int play_count = deadbeef->pl_find_meta_int(track, META_PLAY_COUNT, 0);
+    deadbeef->pl_lock();
+    const char *last_played_raw = deadbeef->pl_find_meta(track, META_LAST_PLAYED_EPOCH);
+    deadbeef->pl_unlock();
+
+    int last_played;
+    if(!last_played_raw) last_played = 0;
+    else last_played = (int64_t)strtoll(last_played_raw, NULL, 10);
 
     // Free the memory from the copy
     free(songPath);
 
     // Update stats on the stat struct
     stat->play_count = play_count;
-    // TODO figure out how to format this in the ui
-    stat->last_played = 1787279087000;
+    stat->last_played = last_played;
 }
 
 // Places a string representation of the given number in str
@@ -90,22 +96,29 @@ static int updateStat(DB_playItem_t *track){
 
     updateIntMeta(stat.play_count, track, META_PLAY_COUNT);
 
-    time_t last_played = stat.last_played / 1000;
+    time_t last_played = stat.last_played;
     
     struct tm *tm_info = localtime(&last_played);
     char numberStr[64];
-    // TODO make this time format configurable in the plugin config screen
-    strftime(
-        numberStr,
-        sizeof(numberStr),
-        "%Y-%m-%d %H:%M:%S",
-        tm_info
-    );
+
+    // Default to a dash when no value is present
+    if(last_played == 0) strcpy(numberStr, "-");
+    else{
+        // Populate an actual timestamp
+        strftime(
+            numberStr,
+            sizeof(numberStr),
+            // TODO make this time format configurable in the plugin config screen
+            "%Y-%m-%d %H:%M:%S",
+            tm_info
+        );
+    }
     deadbeef->pl_replace_meta(
         track,
         META_LAST_PLAYED,
         numberStr
     );
+    updateIntMeta(0, track, META_LAST_PLAYED_EPOCH);
 
     return 0;
 }
@@ -179,27 +192,24 @@ static int songFinished(char *songPath, DB_playItem_t *track){
 // Called when deadbeef triggers an event
 static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint32_t p2){
 
-    DB_playItem_t *track = deadbeef->pl_get_first(PL_MAIN);
-
     if(current_event == DB_EV_PLAYLISTCHANGED){
-        if (track) {
+        DB_playItem_t *playlist_track = deadbeef->pl_get_first(PL_MAIN);
+        if (playlist_track) {
             // TODO see if this updates too frequently
             // deadbeef->log("event update stat\n");
             updateStats();
         }
     }
 
-
-
-
-
     // Update stats when the track finishes playing
+    // TODO make sure this only triggers when the song plays all the way to the end, not when it is skipped
     if(current_event == DB_EV_SONGFINISHED) {
         // Get the data about the event
         ddb_event_track_t *event = (ddb_event_track_t *)ctx;
         // Get the path from the metadata
         char *songPath;
-        int success = copySongPath(event->track, &songPath);
+        DB_playItem_t *track = event->track;
+        int success = copySongPath(track, &songPath);
 
         // Exit on fail
         if(success != 0) return success;
