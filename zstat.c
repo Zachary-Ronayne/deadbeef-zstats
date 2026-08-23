@@ -12,15 +12,11 @@
 #define META_PLAY_COUNT "zstat_play_count"
 // Metadata name for last played timestamp
 #define META_LAST_PLAYED "zstat_last_played"
+// Metadata name for last played timestamp as an epoch timestamp
+#define META_LAST_PLAYED_EPOCH "zstat_last_played_epoch"
 
 // Main instance for deadbeef
 static DB_functions_t *deadbeef;
-
-static int songFinished(char *songPath){
-    deadbeef->log("song done %s", songPath);
-
-    return 0;
-}
 
 // Places the path in the given path pointer, returns 0 on success. Must free path if 0 is not returned
 static int copySongPath(DB_playItem_t *track, char **path){
@@ -57,15 +53,15 @@ static void findsStat(DB_playItem_t *track, zstat *stat){
     // Grab the path from the track
     char *songPath;
     int success = copySongPath(track, &songPath);
-    deadbeef->log("found path %s\n", songPath);
 
     // TODO use path to get stats
+    const int play_count = deadbeef->pl_find_meta_int(track, META_PLAY_COUNT, 0);
 
     // Free the memory from the copy
     free(songPath);
 
     // Update stats on the stat struct
-    stat->play_count = 67;
+    stat->play_count = play_count;
     // TODO figure out how to format this in the ui
     stat->last_played = 1787279087000;
 }
@@ -146,6 +142,40 @@ static int stop(void) {
     return 0;
 }
 
+static int songFinished(char *songPath, DB_playItem_t *track){
+    // TODO add an explanation of this to the readme for how to use the fields
+
+    // TODO figure out if this works consistently
+    const int play_count = deadbeef->pl_find_meta_int(track, META_PLAY_COUNT, 0);
+    updateIntMeta(play_count + 1, track, META_PLAY_COUNT);
+
+    // TODO figure out if this works consistently
+    // TODO store both epoch and 
+    // Uupdate last played
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    char numberStr[64];
+    // TODO make this time format configurable in the plugin config screen
+    // TODO abstract out these common lines
+    // TODO make last played default to "-" and the epoch to 0 if there is no last played
+    // TODO make sure that the values are set to default when the song initially plays, and doesn't double count
+    strftime(
+        numberStr,
+        sizeof(numberStr),
+        "%Y-%m-%d %H:%M:%S",
+        tm_info
+    );
+    deadbeef->pl_replace_meta(
+        track,
+        META_LAST_PLAYED,
+        numberStr
+    );
+
+    updateIntMeta((int64_t)now, track, META_LAST_PLAYED_EPOCH);
+
+    return 0;
+}
+
 // Called when deadbeef triggers an event
 static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint32_t p2){
 
@@ -154,7 +184,7 @@ static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint
     if(current_event == DB_EV_PLAYLISTCHANGED){
         if (track) {
             // TODO see if this updates too frequently
-            deadbeef->log("event update stat\n");
+            // deadbeef->log("event update stat\n");
             updateStats();
         }
     }
@@ -175,7 +205,7 @@ static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint
         if(success != 0) return success;
 
         // Handle treating the song as played
-        success = songFinished(songPath);
+        success = songFinished(songPath, track);
 
         // Free the memory used for the path
         free(songPath);
