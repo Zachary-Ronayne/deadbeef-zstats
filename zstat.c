@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <inttypes.h>
 #include <string.h>
+#include <stdbool.h>
+#include <glib.h>
 
 #include <deadbeef.h>
 
@@ -17,6 +19,38 @@
 
 // Main instance for deadbeef
 static DB_functions_t *deadbeef;
+
+// Timer to regularly update the current play time
+static int timer_id = 0;
+
+// Fields for tracking current playtime
+static DB_playItem_t *current_track = NULL;
+static float current_playpos = 0.0f;
+static float current_duration = 0.0f;
+static bool track_started = false;
+
+// Update the timestamp the current track is playing
+static void update_current_playtime(){
+    // Do nothing if there is no track, or the track isn't playing yet
+    if(!track_started || !current_track) return;
+
+    // Find the current position of the track being played
+    float playpos = deadbeef->streamer_get_playpos();
+
+    // If that position is later than the current position, update the current position
+    if (playpos > current_playpos) current_playpos = playpos;
+}
+
+static gboolean update_timer_callback(gpointer user_data){
+    // User data is not needed
+    (void)user_data;
+
+    // Update the time
+    update_current_playtime();
+
+    // Tell the timer to keep going forever
+    return G_SOURCE_CONTINUE;
+}
 
 // Allocate memory for the song in the given path pointer, returns 0 on success. Must free path if 0 is not returned
 static int allocSongPath(DB_playItem_t *track, char **path){
@@ -61,18 +95,11 @@ static void findsStat(DB_playItem_t *track, zstat *stat){
     deadbeef->pl_lock();
     const char *last_played_raw = deadbeef->pl_find_meta(track, META_LAST_PLAYED_EPOCH);
     deadbeef->pl_unlock();
-    deadbeef->log("found stats path: %s, count: %i, lastPlayed: %s\n", songPath, play_count, last_played_raw);
 
     // Find the last played epoch, defaulting to 0 if nothing was found5
     int last_played;
-    if(!last_played_raw){
-        deadbeef->log("no raw found: %s\n", last_played_raw);
-        last_played = 0;
-    }
-    else{
-        deadbeef->log("raw found: %s\n", last_played_raw);
-        last_played = (int64_t)strtoll(last_played_raw, NULL, 10);
-    }
+    if(!last_played_raw) last_played = 0;
+    else last_played = (int64_t)strtoll(last_played_raw, NULL, 10);
 
     // Free the memory from the copy
     free(songPath);
@@ -157,11 +184,22 @@ static int connect(void){
 
 // Run when deadbeef starts
 static int start(void){
+    // Start up the timer, once a second, update the current playtime, only if the timer hasn't already been started
+    if(timer_id == 0) timer_id = g_timeout_add(1000, update_timer_callback, NULL);
+
+    // Return success
     return 0;
 }
 
 // Called when the plugin stops
 static int stop(void) {
+    // Clean up the timer
+    if(timer_id != 0) {
+        g_source_remove(timer_id);
+        timer_id = 0;
+    }
+
+    // Return success
     return 0;
 }
 
@@ -186,34 +224,71 @@ static int songFinished(char *songPath, DB_playItem_t *track){
 // Called when deadbeef triggers an event
 static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint32_t p2){
 
-    // If the playlist was changed, i.e. new songs were loaded, reload all stats
-    if(current_event == DB_EV_PLAYLISTCHANGED){
-        // TODO see if this updates too frequently
-        // updateStats();
-    }
+    // Different processing per event type
+    switch(current_event){
+        // If the playlist was changed, i.e. new songs were loaded, reload all stats
+        case DB_EV_PLAYLISTCHANGED: {
+            updateStats();
+            return 0;
+        }
 
-    // TODO make sure this only triggers when the song plays all the way to the end, not when it is skipped
-    // If a song finished playing, update the stats
-    if(current_event == DB_EV_SONGFINISHED) {
-        // Get the data about the event
-        ddb_event_track_t *event = (ddb_event_track_t *)ctx;
+        // If a song finished playing, update the stats
+        case DB_EV_SONGFINISHED: {
+            // Do nothing if the track hasn't started playing or there is no track
+            if (!track_started || !current_track) return 0;
 
-        // Get the path from the metadata
-        char *songPath;
-        DB_playItem_t *track = event->track;
-        int success = allocSongPath(track, &songPath);
+            // Update the values for when the track is played
+            update_current_playtime();
 
-        // Exit on fail
-        if(success != 0) return success;
+            // If the track has played for some amount of time, find how long the track has been playing for
+            if(current_duration > 0){
+                // Duration remaining
+                float remaining = current_duration - current_playpos;
+                // Percentage still to play
+                float percentage = current_playpos / current_duration;
 
-        // Handle treating the song as played
-        success = songFinished(songPath, track);
+                // TODO refine these conditions
+                // If at least 95% of the song played, or there are less than 5 seconds left, count the song as played
+                if(percentage >= 0.95f || remaining <= 5.0f) {
+                   
+                    // Get the path from the metadata
+                    char *songPath;
+                    int success = allocSongPath(current_track, &songPath);
 
-        // Free the memory used for the path
-        free(songPath);
+                    // Exit on fail
+                    if(success != 0) return success;
 
-        // Return if the process was successful
-        return success;
+                    // Handle treating the song as played
+                    success = songFinished(songPath, current_track);
+
+                    // Free the memory used for the path
+                    free(songPath);
+
+                    // Reset for the next track
+                    current_track = NULL;
+                    current_playpos = 0.0f;
+                    current_duration = 0.0f;
+                    track_started = false;
+
+                    return 0;
+                }
+            }
+        }
+
+        // When the song starts, update the current playing track
+        case DB_EV_SONGSTARTED: {
+            // Find the currently playing track
+            ddb_event_track_t *event = (ddb_event_track_t *)ctx;
+            if(!event || !event->track) return 0;
+
+            // If there is a track playing, reset the current playback values
+            current_track = event->track;
+            current_playpos = 0.0f;
+            current_duration = deadbeef->pl_get_item_duration(current_track);
+            track_started = true;
+
+            return 0;
+        }
     }
 
     // Nothing to do, return success

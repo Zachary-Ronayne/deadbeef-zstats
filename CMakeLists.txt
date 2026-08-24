@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(zstat LANGUAGES C VERSION 2.0 DESCRIPTION "DeaDBeeF zstat Plugin")
+project(zstat LANGUAGES C VERSION 0.1 DESCRIPTION "DeaDBeeF zstat Plugin")
 
 unset(DEADBEEF_H CACHE)
 
@@ -19,6 +19,12 @@ endif()
 # Add zstat
 add_library(zstat SHARED zstat.c)
 set_property(TARGET zstat PROPERTY C_STANDARD 99)
+
+# Ensure glib is included, used for the timer to run
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+target_link_libraries(zstat PRIVATE PkgConfig::GLIB)
+
 
 set(CMAKE_C_FLAGS_DEBUG "-g -Og -Wall -pedantic -DDEBUG")
 target_compile_options(zstat PRIVATE
