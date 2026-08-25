@@ -48,6 +48,8 @@ table name: zstat
 | play_count | int64 | number of times the track has been played |
 | last_played | int64 | epoch time of the last time the song finished playing |
 
+Hash is not currently implemented
+
 # Notes
 
 This has only been tested on Linux Mint Cinnamon

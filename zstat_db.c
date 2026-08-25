@@ -76,7 +76,8 @@ int zstat_db_init(DB_functions_t *deadbeef_instance){
         "CREATE TABLE IF NOT EXISTS zstat ("
         "    path TEXT PRIMARY KEY,"
         "    play_count INTEGER NOT NULL DEFAULT 0,"
-        "    last_played INTEGER NOT NULL DEFAULT 0"
+        "    last_played INTEGER NOT NULL DEFAULT 0, "
+        "    hash BLOB"
         ");";
 
     // Create the table

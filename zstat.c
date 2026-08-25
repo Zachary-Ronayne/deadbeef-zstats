@@ -12,6 +12,8 @@
 #include <deadbeef.h>
 #include <zstat_db.h>
 
+// TODO add a script to uninstall
+
 // Metadata name for play count
 #define META_PLAY_COUNT "zstat_play_count"
 // Metadata name for last played timestamp
