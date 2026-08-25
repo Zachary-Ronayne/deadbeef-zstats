@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <glib.h>
+#include <time.h>
 
 #include <deadbeef.h>
 #include <zstat_db.h>
@@ -83,6 +84,10 @@ static zstat findsStat(DB_playItem_t *track){
     char *songPath;
     int success = allocSongPath(track, &songPath);
 
+#ifdef DEBUG
+    deadbeef->log("Finding stats for %s\n", songPath);
+#endif
+
     // Default stats to 0
     zstat stat;
     stat.play_count = 0;
@@ -148,10 +153,19 @@ static int updateStats(void){
     // Find the first track in the current playlist
     DB_playItem_t *track = deadbeef->pl_get_first(PL_MAIN);
 
+#ifdef DEBUG
+    // Track starting time
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+#endif
+
+    int cnt = 0;
+
     // While there is still a track in the playlist, update it
     while(track){
         // Find the expected value of the stat
         zstat stat = findsStat(track);
+        cnt++;
 
         // Update that track in deadbeef
         update_deadbeef_meta(track, stat);
@@ -161,6 +175,13 @@ static int updateStats(void){
         deadbeef->pl_item_unref(track);
         track = next;
     }
+
+#ifdef DEBUG
+    // Log start up time
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long long elapsed_ms = (end.tv_sec - start.tv_sec) * 1000LL + (end.tv_nsec - start.tv_nsec) / 1000000LL;
+    deadbeef->log("Took: %lld ms, cnt: %i\n", elapsed_ms, cnt);
+#endif
 
     return 0;
 }
@@ -208,6 +229,10 @@ static int songFinished(char *songPath, DB_playItem_t *track){
     zstat stat;
     stat.play_count = play_count + 1;
     stat.last_played = now;
+
+#ifdef DEBUG
+    deadbeef->log("Updating stats for %s\n", songPath);
+#endif
 
     // Update the sql db
     zstat_db_update(songPath, stat);

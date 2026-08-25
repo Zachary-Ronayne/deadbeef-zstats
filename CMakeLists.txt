@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.14)
 project(zstat LANGUAGES C VERSION 0.1 DESCRIPTION "DeaDBeeF zstat Plugin")
 
 unset(DEADBEEF_H CACHE)
-
 find_file(DEADBEEF_H 
     NAMES deadbeef.h
     PATHS "${CMAKE_CURRENT_LIST_DIR}"
@@ -34,6 +33,9 @@ target_compile_options(zstat PRIVATE
         -DDDB_API_LEVEL=10 -DDDB_WARN_DEPRECATED=1
         -DPROJECT_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
         -DPROJECT_VERSION_MINOR=${PROJECT_VERSION_MINOR})
+
+# Uncomment for debug logs
+# target_compile_definitions(zstat PRIVATE DEBUG)
 
 # Name the library zstat
 set_target_properties(zstat PROPERTIES PREFIX "")

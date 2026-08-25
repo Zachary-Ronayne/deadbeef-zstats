@@ -8,7 +8,13 @@
 #include <utils.h>
 #include <sqlite3.h>
 
-// TODO optimize db operations to be in bulk, for now doing single operations
+/*
+TODO May want to optimize db operations to be in bulk, for now doing single operations.
+2k songs loaded in 10-20 ms, good enough for me for now
+*/
+
+// TODO may want to investigate deadbeef being slow to close?
+
 
 // TODO use the hash of the audio data to lookup the db record if the file path is not found
 
