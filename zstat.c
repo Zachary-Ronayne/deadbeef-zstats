@@ -27,8 +27,10 @@ static int timer_id = 0;
 
 // Fields for tracking current playtime
 static DB_playItem_t *current_track = NULL;
-static float current_playpos = 0.0f;
-static float current_duration = 0.0f;
+// Current position of the playing song, in seconds
+static float track_position = 0.0f;
+// Current total duration of the playing song, in seconds
+static float track_duration = 0.0f;
 static bool track_started = false;
 
 // Update the timestamp the current track is playing
@@ -40,7 +42,7 @@ static void update_current_playtime(){
     float playpos = deadbeef->streamer_get_playpos();
 
     // If that position is later than the current position, update the current position
-    if (playpos > current_playpos) current_playpos = playpos;
+    if (playpos > track_position) track_position = playpos;
 }
 
 static gboolean update_timer_callback(gpointer user_data){
@@ -264,15 +266,23 @@ static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint
             update_current_playtime();
 
             // If the track has played for some amount of time, find how long the track has been playing for
-            if(current_duration > 0){
-                // Duration remaining
-                float remaining = current_duration - current_playpos;
-                // Percentage still to play
-                float percentage = current_playpos / current_duration;
+            if(track_duration > 0){
 
-                // TODO refine these conditions
-                // If at least 95% of the song played, or there are less than 5 seconds left, count the song as played
-                if(percentage >= 0.95f || remaining <= 5.0f) {
+                // If the song is less than 10 seconds long, 50% of it must have been played, otherwise, there must be less than 5 seconds left to play
+                bool track_finished;
+                if(track_duration < 10.0f){
+                    float percentage = track_position / track_duration;
+                    track_finished = percentage >= 0.50f;
+#ifdef DEBUG
+                    deadbeef->log("short song, pos: %f, duration: %f, percentage: %f, finished: %i", track_position, track_duration, percentage, track_finished);
+#endif
+                }
+                else{
+                    float remaining = track_duration - track_position;
+                    track_finished = remaining <= 5.0f;
+                }
+
+                if(track_finished){
                    
                     // Get the path from the metadata
                     char *songPath;
@@ -289,8 +299,8 @@ static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint
 
                     // Reset for the next track
                     current_track = NULL;
-                    current_playpos = 0.0f;
-                    current_duration = 0.0f;
+                    track_position = 0.0f;
+                    track_duration = 0.0f;
                     track_started = false;
 
                     return 0;
@@ -306,8 +316,8 @@ static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint
 
             // If there is a track playing, reset the current playback values
             current_track = event->track;
-            current_playpos = 0.0f;
-            current_duration = deadbeef->pl_get_item_duration(current_track);
+            track_position = 0.0f;
+            track_duration = deadbeef->pl_get_item_duration(current_track);
             track_started = true;
 
             return 0;
