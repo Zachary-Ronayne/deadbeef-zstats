@@ -9,6 +9,7 @@
 #include <glib.h>
 
 #include <deadbeef.h>
+#include <zstat_db.h>
 
 // Metadata name for play count
 #define META_PLAY_COUNT "zstat_play_count"
@@ -76,37 +77,25 @@ static int allocSongPath(DB_playItem_t *track, char **path){
     return 0;
 }
 
-// Holds the stats of a single track
-typedef struct Zstat{
-    int64_t play_count;
-    int64_t last_played;
-} zstat;
-
-// Place the stats for the given track into the given stat pointer
-static void findsStat(DB_playItem_t *track, zstat *stat){
+// Get the stats for the given track
+static zstat findsStat(DB_playItem_t *track){
     // Grab the path from the track
     char *songPath;
     int success = allocSongPath(track, &songPath);
 
-    // TODO use path to get stats from sql db? Or don't need a separate db?
+    // Default stats to 0
+    zstat stat;
+    stat.play_count = 0;
+    stat.last_played = 0;
 
-    // Grab current stats from deadbeef's metadata
-    const int play_count = deadbeef->pl_find_meta_int(track, META_PLAY_COUNT, 0);
-    deadbeef->pl_lock();
-    const char *last_played_raw = deadbeef->pl_find_meta(track, META_LAST_PLAYED_EPOCH);
-    deadbeef->pl_unlock();
-
-    // Find the last played epoch, defaulting to 0 if nothing was found5
-    int last_played;
-    if(!last_played_raw) last_played = 0;
-    else last_played = (int64_t)strtoll(last_played_raw, NULL, 10);
+    // Find the data
+    zstat_db_find(songPath, &stat);
 
     // Free the memory from the copy
     free(songPath);
 
-    // Update stats on the stat struct
-    stat->play_count = play_count;
-    stat->last_played = last_played;
+    // Return the data
+    return stat;
 }
 
 // Places a string representation of the given number in str
@@ -142,7 +131,7 @@ static void updateMetaLastTimestamp(DB_playItem_t *track, time_t last_played){
 }
 
 // Update the stats of the given track to the given values
-static int updateStat(DB_playItem_t *track, zstat stat){
+static int update_deadbeef_meta(DB_playItem_t *track, zstat stat){
     // Update all values
     deadbeef->pl_lock();
     updateIntMeta(stat.play_count, track, META_PLAY_COUNT);
@@ -162,11 +151,10 @@ static int updateStats(void){
     // While there is still a track in the playlist, update it
     while(track){
         // Find the expected value of the stat
-        zstat stat;
-        findsStat(track, &stat);
+        zstat stat = findsStat(track);
 
-        // Update that track
-        updateStat(track, stat);
+        // Update that track in deadbeef
+        update_deadbeef_meta(track, stat);
 
         // Go to the next track
         DB_playItem_t *next = deadbeef->pl_get_next(track, PL_MAIN);
@@ -184,6 +172,13 @@ static int connect(void){
 
 // Run when deadbeef starts
 static int start(void){
+    // Initialize the db
+    int db_success = zstat_db_init(deadbeef);
+    if(db_success != 0){
+        deadbeef->log("Failed to init zstat db\n");
+        return db_success;
+    }
+
     // Start up the timer, once a second, update the current playtime, only if the timer hasn't already been started
     if(timer_id == 0) timer_id = g_timeout_add(1000, update_timer_callback, NULL);
 
@@ -214,8 +209,11 @@ static int songFinished(char *songPath, DB_playItem_t *track){
     stat.play_count = play_count + 1;
     stat.last_played = now;
 
-    // Update the actual stat
-    updateStat(track, stat);
+    // Update the sql db
+    zstat_db_update(songPath, stat);
+
+    // Update the metadata in deadbeef
+    update_deadbeef_meta(track, stat);
 
     // Return success
     return 0;

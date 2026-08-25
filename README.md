@@ -9,9 +9,11 @@ Feel free to use and or modify
 # Installing
 
 `deadbeef.h` needs to be added to the root directory of this project. Get it from here, or if you have the source already: https://github.com/DeaDBeeF-Player/deadbeef
+
 Requires that sql lite 3 is installed
+
 For Linux Mint:
-sudo apt install libsqlite3-dev
+`sudo apt install libsqlite3-dev`
 
 To install, clone the repo and run
 ```
@@ -32,16 +34,19 @@ Stats are stored and displayed in deadbeef like normal metadata fields
 
 %zstat_last_played% is a human readable timestamp of the last time the track was played for display. Not the source of truth, always overridden by the epoch timestamp
 
-# TODO
+# DB
 
-Stats are kept in a local SQL Lite db
+Stats are kept in a local SQL Lite db. This is to avoid dealing with storing data on different audio file types.
+One quirk of this is that if you edit the metadata in deadbeef, it will not persist to the local db.
+If you want to reset the stats, delete the local db file, or manually update the db, and restart deadbeef.
+
 table name: zstat
 | field name | type | description |
 | - | - | - |
-| id | file path | primary key |
+| path | file path | primary key |
 | hash | blob | hash of part of the file, used for relinking a file if its location changes |
-| playCount | int64 | number of times the track has been played |
-| lastPlayed | int64 | epoch time of the last time the song finished playing |
+| play_count | int64 | number of times the track has been played |
+| last_played | int64 | epoch time of the last time the song finished playing |
 
 # Notes
 

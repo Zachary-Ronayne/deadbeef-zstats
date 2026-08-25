@@ -16,8 +16,8 @@ else()
     message(STATUS "deadbeef.h: present (${DEADBEEF_H})")
 endif()
 
-# Add zstat
-add_library(zstat SHARED zstat.c)
+# Add zstat plugin diles
+add_library(zstat SHARED zstat.c zstat_db.c utils.c)
 set_property(TARGET zstat PROPERTY C_STANDARD 99)
 
 # Ensure glib is included, used for the timer to run
@@ -25,6 +25,9 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
 target_link_libraries(zstat PRIVATE PkgConfig::GLIB)
 
+# Add sqlite
+pkg_check_modules(SQLITE3 REQUIRED IMPORTED_TARGET sqlite3)
+target_link_libraries(zstat PRIVATE PkgConfig::SQLITE3)
 
 set(CMAKE_C_FLAGS_DEBUG "-g -Og -Wall -pedantic -DDEBUG")
 target_compile_options(zstat PRIVATE
