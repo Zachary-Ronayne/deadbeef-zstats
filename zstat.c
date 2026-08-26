@@ -20,6 +20,10 @@
 #define META_LAST_PLAYED "zstat_last_played"
 // Metadata name for last played timestamp as an epoch timestamp
 #define META_LAST_PLAYED_EPOCH "zstat_last_played_epoch"
+// Default format for display timestamps
+#define DEFAULT_TIME_FORMAT "%Y-%m-%d %H:%M:%S"
+// Name for the config for the format for display timestamps
+#define CONFIG_TIME_FORMAT "zstat.time_format"
 
 // Main instance for deadbeef
 static DB_functions_t *deadbeef;
@@ -34,6 +38,9 @@ static float track_position = 0.0f;
 // Current total duration of the playing song, in seconds
 static float track_duration = 0.0f;
 static bool track_started = false;
+
+// Last known value of the time format, hopefully 256 is more than enough space for a time format
+static char current_time_format[256];
 
 // Update the timestamp the current track is playing
 static void update_current_playtime(){
@@ -130,9 +137,12 @@ static void updateMetaLastTimestamp(DB_playItem_t *track, time_t last_played){
     if(last_played == 0) strcpy(numberStr, "-");
     // Populate an actual timestamp
     else{
-        // TODO make this time format a config
+        // Grab the time format
+       const char *time_format = deadbeef->conf_get_str_fast(CONFIG_TIME_FORMAT, DEFAULT_TIME_FORMAT);
+
+        // Apply the time format to the last played epoch
         struct tm *tm_info = localtime(&last_played);
-        strftime(numberStr, sizeof(numberStr), "%Y-%m-%d %H:%M:%S", tm_info);
+        strftime(numberStr, sizeof(numberStr), time_format, tm_info);
     }
 
     // Set the meta field
@@ -203,6 +213,10 @@ static int start(void){
         deadbeef->log("Failed to init zstat db\n");
         return db_success;
     }
+
+    // Store current time format
+    const char* config_time_format = deadbeef->conf_get_str_fast(CONFIG_TIME_FORMAT, DEFAULT_TIME_FORMAT);
+    snprintf(current_time_format, sizeof(current_time_format), "%s", config_time_format);
 
     // Start up the timer, once a second, update the current playtime, only if the timer hasn't already been started
     if(timer_id == 0) timer_id = g_timeout_add(1000, update_timer_callback, NULL);
@@ -324,11 +338,32 @@ static int handle_event(uint32_t current_event, uintptr_t ctx, uint32_t p1, uint
 
             return 0;
         }
+
+        // Update all stats when the time format changes
+        case DB_EV_CONFIGCHANGED: {
+            const char* new_time_format = deadbeef->conf_get_str_fast(CONFIG_TIME_FORMAT, DEFAULT_TIME_FORMAT);
+
+
+            if(strcmp(new_time_format, current_time_format) != 0){
+                // Use the new time format
+                new_time_format = current_time_format;
+
+                snprintf(current_time_format, sizeof(current_time_format), "%s", new_time_format);
+
+
+                // Update stats
+                updateStats();
+            }
+            return 0;
+        }
     }
 
     // Nothing to do, return success
     return 0;
 }
+
+static const char zstat_config_dialog[] =
+        "property \"Time Format:\" entry " CONFIG_TIME_FORMAT " \"" DEFAULT_TIME_FORMAT "\";";
 
 // Define the plugin
 static DB_misc_t plugin = {
@@ -367,7 +402,7 @@ static DB_misc_t plugin = {
 
         .message = handle_event,
 
-        .configdialog = NULL
+        .configdialog = zstat_config_dialog
     }
 };
 
