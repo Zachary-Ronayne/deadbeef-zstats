@@ -40,6 +40,10 @@ Stats are stored and displayed in deadbeef like normal metadata fields
 
 `%zstat_last_played%` is a human readable string timestamp of the last time the track was played. Not the source of truth, always overridden by the epoch timestamp
 
+# Config
+
+Time Format: A string in strftime format for converting epoch timestamp for display in the `%zstat_last_played% column
+
 # DB
 
 Stats are kept in a local SQLite db. This is to avoid dealing with storing data on different audio file types.

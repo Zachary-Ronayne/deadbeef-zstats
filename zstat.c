@@ -12,8 +12,6 @@
 #include <deadbeef.h>
 #include <zstat_db.h>
 
-// TODO describe the configuration value for time format in the read me
-
 // TODO does the db need to be closed on plugin end?
 
 // Metadata name for play count
