@@ -12,8 +12,6 @@
 #include <deadbeef.h>
 #include <zstat_db.h>
 
-// TODO does the db need to be closed on plugin end?
-
 // Metadata name for play count
 #define META_PLAY_COUNT "zstat_play_count"
 // Metadata name for last played timestamp
@@ -282,6 +280,9 @@ static int stop(void) {
         g_source_remove(timer_id);
         timer_id = 0;
     }
+
+    // Close the db
+    zstat_db_close();
 
     // Return success
     return 0;

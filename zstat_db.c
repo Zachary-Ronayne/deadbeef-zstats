@@ -84,6 +84,13 @@ int zstat_db_init(DB_functions_t *deadbeef_instance){
     return 0;
 }
 
+int zstat_db_close(void){
+    if(db != NULL){
+        printf("zstat closing db\n");
+        sqlite3_close(db);
+    }
+}
+
 int zstat_db_find(int num_files, char *file_paths[], zstat stats[]){
 
     // Define the start of the query

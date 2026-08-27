@@ -10,6 +10,9 @@ typedef struct Zstat{
 // Do initial setup for the db
 int zstat_db_init(DB_functions_t *deadbeef_instance);
 
+// Close the db when it is no longer needed
+int zstat_db_close(void);
+
 /*
 Get the stats for a given track
 @param num_files The size of both arrays
