@@ -12,6 +12,10 @@
 #include <deadbeef.h>
 #include <zstat_db.h>
 
+// TODO describe the configuration value for time format in the read me
+
+// TODO does the db need to be closed on plugin end?
+
 // Metadata name for play count
 #define META_PLAY_COUNT "zstat_play_count"
 // Metadata name for last played timestamp
@@ -87,31 +91,6 @@ static int allocSongPath(DB_playItem_t *track, char **path){
     return 0;
 }
 
-// Get the stats for the given track
-static zstat findsStat(DB_playItem_t *track){
-    // Grab the path from the track
-    char *songPath;
-    int success = allocSongPath(track, &songPath);
-
-#ifdef DEBUG
-    deadbeef->log("Finding stats for %s\n", songPath);
-#endif
-
-    // Default stats to 0
-    zstat stat;
-    stat.play_count = 0;
-    stat.last_played = 0;
-
-    // Find the data
-    zstat_db_find(songPath, &stat);
-
-    // Free the memory from the copy
-    free(songPath);
-
-    // Return the data
-    return stat;
-}
-
 // Places a string representation of the given number in str
 static void stringValue(int64_t number, char *str, size_t stringSize){
     snprintf(str, stringSize, "%" PRId64, number);
@@ -132,15 +111,26 @@ static void updateMetaLastTimestamp(DB_playItem_t *track, time_t last_played){
     char numberStr[64];
 
     // Default to a dash when no value is present
-    if(last_played == 0) strcpy(numberStr, "-");
+    if(last_played == 0){
+        strcpy(numberStr, "-");
+    }
     // Populate an actual timestamp
     else{
         // Grab the time format
-       const char *time_format = deadbeef->conf_get_str_fast(CONFIG_TIME_FORMAT, DEFAULT_TIME_FORMAT);
+        const char *time_format = deadbeef->conf_get_str_fast(CONFIG_TIME_FORMAT, DEFAULT_TIME_FORMAT);
 
         // Apply the time format to the last played epoch
         struct tm *tm_info = localtime(&last_played);
-        strftime(numberStr, sizeof(numberStr), time_format, tm_info);
+        if(tm_info == NULL){
+            deadbeef->log("zstat error getting local time for last played %i %i\n", last_played, &last_played);
+            return;
+        }
+
+        int result = strftime(numberStr, sizeof(numberStr), time_format, tm_info);
+        if(result == 0){
+            deadbeef->log("zstat error formatting time for last played %i\n", last_played);
+            return;
+        }
     }
 
     // Set the meta field
@@ -160,6 +150,32 @@ static int update_deadbeef_meta(DB_playItem_t *track, zstat stat){
     return 0;
 }
 
+static void freeTrackListStats(int num_tracks, int num_paths, DB_playItem_t *tracks[], char *paths[]){
+    // Free the memory used by the tracks
+    for(int i = 0; i < num_tracks; i++){
+        DB_playItem_t* track = tracks[i];
+        deadbeef->pl_item_unref(track);
+    }
+
+    // Free the memory of the paths
+    for(int i = 0; i < num_tracks; i++){
+        free(paths[i]);
+    }
+}
+
+static void updateTrackListStats(int num_tracks, zstat results[], DB_playItem_t *tracks[], char *paths[]){
+    // Go through all specified tracks
+    for(int i = 0; i < num_tracks; i++){
+        // Find the track to update and stat to use
+        zstat stat = results[i];
+        DB_playItem_t* track = tracks[i];
+
+        // Update that track in deadbeef
+        update_deadbeef_meta(track, stat);
+    }
+    freeTrackListStats(num_tracks, num_tracks, tracks, paths);
+}
+
 // Update the stats of all records when the plugin loads
 static int updateStats(void){
     // Find the first track in the current playlist
@@ -171,30 +187,68 @@ static int updateStats(void){
     clock_gettime(CLOCK_MONOTONIC, &start);
 #endif
 
-    int cnt = 0;
+    // Find the stats and update them all
 
-    // While there is still a track in the playlist, update it
+    // Do this in batches
+    int batch_size = 500;
+    int next_index = 0;
+    int total = 0;
+    zstat stats[batch_size];
+
+    DB_playItem_t *tracks[batch_size];
+    char *paths[batch_size];
+
+    // While there is still a track in the playlist, use it
     while(track){
-        // Find the expected value of the stat
-        zstat stat = findsStat(track);
-        cnt++;
 
-        // Update that track in deadbeef
-        update_deadbeef_meta(track, stat);
-
-        // Go to the next track
+        // Find the next track
         DB_playItem_t *next = deadbeef->pl_get_next(track, PL_MAIN);
-        deadbeef->pl_item_unref(track);
+
+        // If not at the max elements, add that track to be the arrays for preparing to update
+        if(next_index < batch_size){
+            // Store the track and move onto the next
+            tracks[next_index] = track;
+            // Grab the file path
+            char *song_path;
+            int success = allocSongPath(track, &song_path);
+            if(success != 0){
+                freeTrackListStats(next_index + 1, next_index, tracks, paths);
+                return -1;
+            }
+            paths[next_index] = song_path;
+
+            next_index++;
+            total++;
+        }
+        // Otherwise, get the values and update deadbeef
+        else{
+            // Grab the data
+            zstat_db_find(next_index, paths, stats);
+
+            // Update the tracks in deadbeef
+            updateTrackListStats(next_index, stats, tracks, paths);
+            // Reset for the next track
+            next_index = 0;
+        }
+
         track = next;
     }
 
+    // If any tracks remain, update them as well
+    if(next_index != 0){
+        zstat_db_find(next_index, paths, stats);
+        updateTrackListStats(
+            next_index, stats, tracks, paths);
+    }
+
 #ifdef DEBUG
-    // Log start up time
+    // Log time to load the playlist
     clock_gettime(CLOCK_MONOTONIC, &end);
     long long elapsed_ms = (end.tv_sec - start.tv_sec) * 1000LL + (end.tv_nsec - start.tv_nsec) / 1000000LL;
-    deadbeef->log("Took: %lld ms, cnt: %i\n", elapsed_ms, cnt);
+    deadbeef->log("zstat took: %lld ms, to load %i tracks\n", elapsed_ms, total);
 #endif
 
+    // Success
     return 0;
 }
 
