@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(zstat LANGUAGES C VERSION 0.1 DESCRIPTION "DeaDBeeF zstat Plugin")
+project(zstat LANGUAGES C VERSION 1.0 DESCRIPTION "DeaDBeeF zstat Plugin")
 
 unset(DEADBEEF_H CACHE)
 find_file(DEADBEEF_H 

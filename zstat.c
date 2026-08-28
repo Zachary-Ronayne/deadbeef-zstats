@@ -424,8 +424,8 @@ static DB_misc_t plugin = {
         .api_vmajor = 1,
         .api_vminor = 10,
 
-        .version_major = 0,
-        .version_minor = 1,
+        .version_major = 1,
+        .version_minor = 0,
 
         .id = "zstat",
 
