@@ -56,11 +56,9 @@ table name: `zstat`
 | field name | type | description |
 | - | - | - |
 | `path` | file path | primary key |
-| `hash` | blob | hash of part of the file, used for relinking a file if its location changes |
+| `hash` | blob | hash of part of the file, always empty, was going to be used for relinking a file if its location changes, not bothering to implement it |
 | `play_count` | int64 | number of times the track has been played |
 | `last_played` | int64 | epoch time of the last time the song finished playing |
-
-`hash` is not currently implemented
 
 # Notes
 

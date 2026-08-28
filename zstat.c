@@ -233,8 +233,7 @@ static int updateStats(void){
     // If any tracks remain, update them as well
     if(next_index != 0){
         zstat_db_find(next_index, paths, stats);
-        updateTrackListStats(
-            next_index, stats, tracks, paths);
+        updateTrackListStats(next_index, stats, tracks, paths);
     }
 
 #ifdef DEBUG
@@ -243,6 +242,7 @@ static int updateStats(void){
     long long elapsed_ms = (end.tv_sec - start.tv_sec) * 1000LL + (end.tv_nsec - start.tv_nsec) / 1000000LL;
     deadbeef->log("zstat took: %lld ms, to load %i tracks\n", elapsed_ms, total);
 #endif
+
 
     // Success
     return 0;

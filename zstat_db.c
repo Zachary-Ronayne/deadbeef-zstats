@@ -92,7 +92,6 @@ int zstat_db_close(void){
 }
 
 int zstat_db_find(int num_files, char *file_paths[], zstat stats[]){
-
     // Define the start of the query
     const char *start_query =
         "WITH requested(path_index, path) AS ( "
@@ -257,5 +256,3 @@ int zstat_db_update(char *file_path, zstat stat){
     // Success
     return 0;
 }
-
-// TODO for the hash system, just return the struct containing the stats if it is missing or not, then separately grab all needed hashes and then update them
